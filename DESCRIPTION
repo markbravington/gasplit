@@ -1,9 +1,9 @@
 Package: gasplit
 Title: Flexible estimation of 2-category proportions
-Version: 1.0.5
-Author: Mark Bravington <markb1@summerinsouth.net>
+Version: 1.0.6
+Author: Mark Bravington <markb2@summerinsouth.net>
 Description: Like a GLM/GAM where the true category of each sample is unknown, but the response data is a continuous variable with known distributions for category-1 and category-2 samples.
-Maintainer: <markb1@summerinsouth.net>
+Maintainer: Mark Bravington <markb2@summerinsouth.net>
 Imports: mvbutils, atease, mgcv
 Suggests: offarray
 License: CC-BY
