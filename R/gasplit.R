@@ -13,12 +13,14 @@ function(
     # Result is garbage here!
     G <- gam( G=predict_from_previous$G)
     X <- predict( G, newdata=data, type='lpmatrix')
-    pifodds <- rep( 0, nrow( X)) # just so nlglk can run (once only)
-  } else { # normally... set up to fit gam, but don't do it
-    G <- gam( formula=formula, data=data, fit=FALSE) # stuff needed for fit
-    X <- G$X
-    pifodds <- d1( G$y) / d2( G$y) - 1
+    ppn <- plogis( X %*% pars)
+return( ppn)
   }
+
+  # Else (normally) we want to fit. Set up to fit gam, but don't do it
+  G <- gam( formula=formula, data=data, fit=FALSE) # stuff needed for fit
+  X <- G$X
+  pifodds <- d1( G$y) / d2( G$y) - 1
   
   ppn <- 0*pifodds - 1
   
@@ -30,11 +32,6 @@ function(
     # log( prob) = log( d2) + log( 1 + ppn * (d1/d2-1))
     lprob <- log( 1+pifodds*ppn)
   return( -sum( lprob))
-  }
-
-  if( !is.null( predict_from_previous)){
-    nlglk( predict_from_previous$par)
-return( ppn)
   }
 
   if( length( start)==1){
@@ -44,68 +41,116 @@ stopifnot( length( start)==ncol( X))
 
   fitto <- optim( start, nlglk, method='BFGS', 
       control=list( trace=5))
-returnList( par=fitto$par, ppn, G)
+
+return( c( returnList( 
+    beta=fitto$par, ppn, G),
+    fitto[ cq( convergence, message, evaluations)]
+  ))
 }
 
 
-"gasplit_gam" <-
-function( formula, data, d1, d2){
-## Smooth-ready version using RTMB
+"gasplit2" <-
+function( 
+  formula, 
+  data, 
+  d1, d2, 
+  predict_from_previous=NULL,
+  ... # for gam()
+){
+## Allow REs (eg to do splines) and mgcv-style stuff
+stopifnot( require( RTMB))
 
-  G <- gam( formula=formula, data=data, fit=FALSE) # stuff needed for fit
-
-  if( !length( G$S)){
-return( gasplit_nogam( d1=d1, d2=d2, G=G))
+  if( !is.null( predict_from_previous)){
+    # I think we have to actually "fit" the gam, so that we can use predict()
+    # Result is garbage here!
+    # Maybe this could be sped up by using existing estimates as startvals
+    G <- gam( G=predict_from_previous$G)
+    X <- predict( G, newdata=data, type='lpmatrix')
+    ppn <- plogis( X %**% predict_from_previous$beta)
+return( ppn)
   }
   
+  # Else (ie normally), we fit
+  # Stuff needed for fit, but don't actually fit:
+  G <- gam( formula=formula, data=data, fit=FALSE, ...) 
   X <- G$X
-  pifodds <- d1( G$y) / d2( G$y) - 1
-  S <- G$S
-  
-  ppn <- 0*pifodds - 1
-  
-  nlglk <- function( parmy){
-    # Data:
-    ppn <<- plogis( X %*% pars)
-    lglk <- sum( log( 1+pifodds*ppn))
-    
-    # Priors (smooths):
-    
-  return( -sum( lprob))
+  y <- G$y
+  Slengths <- unlist( FOR( G$smooth, length( .$S)))
+  Slist <- list()
+  for( i in seq_along( G$smooth)){
+    Si <- G$smooth[[i]]$S
+    if( length( Si)){ # non-NULL, ie it's a smoother folks
+      # IDNK if gam() returns S as a list if there's just one S...
+      if( !is.list( Si)){ # ... so let's make sure it does
+        Si <- list( Si)
+      }
+      Slist <- c( Slist, Si)
+    }
   }
   
-  fitto <- optim( rep( 1, ncol( X)), nlglk, method='BFGS', 
-      control=list( trace=5))
-returnList( par=fitto$par, ppn)
-}
-
-
-"gasplit_nogam" <-
-function( formula, data, d1, d2, G){
-  if( is.null( G)){
-    G <- gam( formula=formula, data=data, fit=FALSE) 
-    # ...stuff needed for fit
-stopifnot( length( G$S)==0)
+  # Separate rank for each penmat, if several...
+  ranks <- unlist( FOR( G$smooth, .$rank))
+  # but (?maybe?) the same subset of coefs for all
+  # so, replicate 'first.para' if reqd
+  repifreq <- function( smoo, name_of_thing){
+    thing <- smoo[[ name_of_thing]]
+    if( length( thing)==1){
+      thing <- rep( thing, length( smoo$S))
+    }
   }
+    
+  firsts <- unlist( FOR( G$smooth, repifreq( ., 'first.para')))
+  # formo <- G$formula
+  ncoef <- ncol( X)
 
-  X <- G$X
   pifodds <- d1( G$y) / d2( G$y) - 1
   
-  ppn <- 0*pifodds - 1
-  
-  nlglk <- function( pars){
-    ppn <<- plogis( X %*% pars)
-    # prob = d1 * ppn + d2 * (1-ppn)
-    # = ppn * (d1 - d2) + d2
-    # = d2 * ( ppn * (d1/d2-1) + 1)
-    # log( prob) = log( d2) + log( 1 + ppn * (d1/d2-1))
+  nlglk <- function( allpar){
+    beta <- allpar[[1]]
+    if( length( Slist)){
+      log_lambda <- allpar[[2]]
+      lambda <- exp( log_lambda)
+    }
+
+    ppn <- plogis( X %**% beta) # %**% to strip surplus dimension
     lprob <- log( 1+pifodds*ppn)
-  return( -sum( lprob))
+    lglk <- sum( lprob)
+
+    REPORT( beta)
+    REPORT( ppn)
+    # Penalties
+    for( i in seq_along( Slist)){
+      m_i <- dim( Slist[[ i]])[1]
+      irange <- seq( from=firsts[i], length=m_i)
+      lglk <- lglk + 
+          + 0.5 * ranks[ i] * log_lambda[i] + 
+          - 0.5 * lambda[i] * beta[ irange] %**% Slist[[ i]] %**% beta[ irange]
+    }
+
+  return( -lglk)
   }
   
-  fitto <- optim( rep( 1, ncol( X)), nlglk, method='BFGS', 
-      control=list( trace=5))
-returnList( par=fitto$par, ppn)
+  if( length( Slist)){ # smooths
+    allparz <- list( 
+        beta= c( mean( pifodds>0), rep( 0, ncol( X)-1)),
+        log_lambda= rep( 0.01, length( Slist)))
+
+    obj <- MakeADFun( nlglk, allparz, random="beta")
+  } else {
+    # Fixed effects only: should match gasplit(), but use RTMB anyway
+    allparz <- list( beta= c( mean( pifodds>0), rep( 0, ncol( X)-1)))
+    obj <- MakeADFun( nlglk, allparz)
+  }
+  
+  obj$fn( obj$par) # test here before nlminb()
+  fitto <- nlminb( obj$par, obj$fn, obj$gr)
+  obj <- c( 
+      obj, 
+      list( G=G),
+      obj$report(), # beta and ppn
+      fitto[ cq( convergence, message, evaluations)]
+    )
+return( obj)
 }
 
 
@@ -168,7 +213,12 @@ return( dfall)
 
 
 "test_gasplit" <-
-function( sim=NULL, ...){
+function( 
+    sim=NULL, 
+    formulalala= LGLR ~ Y+Z-1, 
+    use2= 's' %in% all.names( formula),
+    ...
+){
   if( is.null( sim)){
     sim <- make_fake_ppns( ...)
   }
@@ -178,7 +228,8 @@ function( sim=NULL, ...){
   d1 <- function( x) dt( x - meanE, df=df_t)
   d2 <- function( x) dt( x + meanE, df=df_t) # meanW === -(meanE)
   environment( d1) <- environment( d2) <- e
-  gg1 <- gasplit( LGLR ~ Y+Z-1, sim, d1=d1, d2=d2)
+  whichever_gasplit <- if( use2) gasplit2 else gasplit
+  gg1 <- whichever_gasplit( formulalala, sim, d1=d1, d2=d2)
   
   # Organize fitted ppn into an array like sim@truth$ppn1
   # Could possibly use predict()... but deviousness would be needed
@@ -195,6 +246,8 @@ returnList(
     tru_ppnE=sim@truth$ppnE, 
     fit_ppnE,
     simpure,
+    formulalala,
+    use2,
     gg1
   )
 }

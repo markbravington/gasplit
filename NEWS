@@ -1,0 +1,1 @@
+v1.1.0 : Added support for 'mgcv' smoothers, thx2 'RTMB'. This is currently in separate 'gasplit2' function; note that the return-value is fundamentally different to that of 'gasplit', coz the latter doesn't use 'RTMB'. 

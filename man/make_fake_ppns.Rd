@@ -10,7 +10,12 @@
 \usage{
 make_fake_ppns(nyears = 4, nzones = 3, interpow = 0.1,
     df_t = 5, mean_nsamp = 100,  meanE = 1, prange = 1, seed = 2)
-test_gasplit( sim=NULL, ...)
+test_gasplit(
+    sim=NULL,
+    formulalala= LGLR ~ Y+Z-1,
+    use2= 's' \%in\% all.names( formula),
+    ...
+  )
 }
 \arguments{
 \item{ nyears, nzones}{number of factor levels}
@@ -20,8 +25,12 @@ test_gasplit( sim=NULL, ...)
 \item{ prange}{how strong the effects should be. If they are too strong, then}
 \item{ seed}{random number seed. The system seed is restored on completion.}
 \item{ sim, ...}{(test_gasplit) \code{sim} should come from a previous call to \code{make_fake_ppns}. If not supplied, then \code{make_fake_ppns} will be run first, using the \code{...} arguments.}
+\item{ formulalala}{what model to fit. The default corresponds to the simulation in \code{make_fake_ppns}. You can try putting smoothers in there, to test \code{gasplit2}.}
+\item{ use2}{if TRUE, force \code{test_gasplit} to fit with \code{gasplit2} rather than \code{gasplit}. Normally auto-deduced based on whether \code{formulalala} contains a call to \code{s} (but the test is not completely reliable, if you care). Even without a smoother, \code{gasplit} and \code{gasplit2} should give the same result.}
 }
-\value{\code{make_fake_ppns} returns a dataframe that has all the stuff you need, plus an attribute \code{truth} which is a list containing the real dope, as stratum-specific \code{offarray}s. Note that \code{truth$samp_ppnE} is the actual ppn of category-1 ("E") samples in each stratum, which will differ from the nominal value given by the factor strengths and interactions because of binomial sampling variability.
+\value{
+\code{make_fake_ppns} returns a dataframe that has all the stuff you need, plus an attribute \code{truth} which is a list containing the real dope, as stratum-specific \code{offarray}s. Note that \code{truth$samp_ppnE} is the actual ppn of category-1 ("E") samples in each stratum, which will differ from the nominal value given by the factor strengths and interactions because of binomial sampling variability.
+\code{test_gasplit} returns a great long list of Stuff. See \bold{Examples} and use yr noddle!
 }
 \seealso{\code{\link{gasplit}}
 }
@@ -35,6 +44,8 @@ hist( sim2$LGLR, nc=40) # to see how good the separation is
 test2 <- test_gasplit( sim2)
 with( test2, plot( tru_ppnE, fit_ppnE))
 abline( 0,1)
+test2b <- test_gasplit( sim2, use2=TRUE)
+summary( test2$fit_ppnE - test2b$fit_ppnE) # close to 0...
 # Make up some new data...
 splodge <- with( test2, simpure[ 1:7,])
 # ... and predict. The result of the original call to gasplit() is
