@@ -135,11 +135,11 @@ return( ppn)
         beta= c( mean( pifodds>0), rep( 0, ncol( X)-1)),
         log_lambda= rep( 0.01, length( Slist)))
 
-    obj <- MakeADFun( nlglk, allparz, random="beta")
+    obj <- RTMB::MakeADFun( nlglk, allparz, random="beta")
   } else {
     # Fixed effects only: should match gasplit(), but use RTMB anyway
     allparz <- list( beta= c( mean( pifodds>0), rep( 0, ncol( X)-1)))
-    obj <- MakeADFun( nlglk, allparz)
+    obj <- RTMB::MakeADFun( nlglk, allparz)
   }
   
   obj$fn( obj$par) # test here before nlminb()

@@ -5,4 +5,5 @@ export( "gasplit",
 import( mvbutils)
 import( atease)
 import( mgcv)
+import( RTMB)
 

@@ -3,7 +3,7 @@ Title: Flexible estimation of 2-category proportions
 Author: Mark Bravington <markb2@summerinsouth.net>
 Description: Like a GLM/GAM where the true category of each sample is unknown, but the response data is a continuous variable with known distributions for category-1 and category-2 samples.
 Maintainer: Mark Bravington <markb2@summerinsouth.net>
-Imports: mvbutils, atease, mgcv
-Suggests: offarray, RTMB
+Imports: mvbutils, atease, mgcv, RTMB
+Suggests: offarray
 License: CC-BY
-Version: 1.1.1
+Version: 1.1.2
