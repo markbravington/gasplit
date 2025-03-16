@@ -135,25 +135,28 @@ stopifnot(
     }
 
     ppn <- plogis( X %**% beta) # %**% to strip surplus dimension
-
-    prob <- 1+pifodds*ppn
+    prob <- 1+pifodds*ppn # these are UNSCALED probs, already with const mult of d2() taken out. OK for logging.
+    
     # lprob <- log( 1+pifodds*ppn)
     # lglk <- sum( lprob)
     
-.   # Non-multi ones are thereby done (but can safely be Xed by PROBIMP of 1 :). 
-    # Accumulate multi ones into a shorter vector
+    # Non-multi ones are thereby done (but can safely be Xed by PROBIMP of 1 :). 
+    # Accumulate multi ones into actual cases (only doing the first imps here)
     prob <- prob * probimp
+    ppn <- ppn * probimp
     
     for( im in 2 %upto% max_n_multi){
       # Update only those cases with at least "im" multimps
-      prob[ has_at_least[[ im]] ] <- prob[ has_at_least[[ im]] ] +
-        prob[ nth_multi[[ im]] ] * probimp[ nth_multi[[ im]] ]
+      prob[ has_at_least[[ im]] ] <- prob[ has_at_least[[ im]] ] + prob[ nth_multi[[ im]] ]
+      ppn[ has_at_least[[ im]] ] <- ppn[ has_at_least[[ im]] ] + ppn[ nth_multi[[ im]] ]
     }
     
     lglk <- sum( log( prob[ primary]))
+    ppn <- ppn[ primary] # expected ppn just for each overall case (not imps); consistent with gasplit2
 
     REPORT( beta)
     REPORT( ppn)
+    
     # Penalties
     for( i in seq_along( Slist)){
       m_i <- dim( Slist[[ i]])[1]
