@@ -39,13 +39,136 @@ return( ppn)
   }  # otherwise, user must ensure start is correct length
 stopifnot( length( start)==ncol( X))
 
-  fitto <- optim( start, nlglk, method='BFGS', 
+  fitto <- optim( start, nlglk, method='BFGS', hessian=TRUE,
       control=list( trace=5))
+      
+  V_beta <- solve( fitto$hessian)
+  SE_beta <- sqrt( diag( V_beta))
 
 return( c( returnList( 
-    beta=fitto$par, ppn, G),
+    beta=fitto$par, SE_beta, V_beta,
+    ppn, G),
     fitto[ cq( convergence, message, evaluations)]
   ))
+}
+
+
+"gasplit_multimp" <-
+function( 
+  formula, 
+  data, 
+  d1, d2,
+  link_field= 'MULTIMP',
+  prob_field= 'PROBIMP',
+  predict_from_previous=NULL,
+  ... # for gam()
+){
+## Allow REs (eg to do splines) and mgcv-style stuff
+stopifnot( require( RTMB))
+
+  if( !is.null( predict_from_previous)){
+    # I think we have to actually "fit" the gam, so that we can use predict()
+    # Result is garbage here!
+    # Maybe this could be sped up by using existing estimates as startvals
+    G <- gam( G=predict_from_previous$G)
+    X <- predict( G, newdata=data, type='lpmatrix')
+    ppn <- plogis( X %**% predict_from_previous$beta)
+return( ppn)
+  }
+  
+  if( !all( hasName( data, c( link_field, prob_field)))){
+    warning( sprintf( 
+      "Fields '%s' and/or '%s' not found; calling 'gasplit2' for ya instead",
+      link_field, prob_field
+    ))
+    
+    mc <- match.call( expand.dots=TRUE)
+    mc[[1]] <- quote( 'gasplit2')
+return( eval.parent( mc))
+  }
+
+  # Prepare for multimp  
+  if( any( c( link_field, prob_field)  %in% all.names( formula))) {
+stop( "WHAAAAT are you thinking??? Link & prob fields don't belong in formula!")
+  }
+  linkid <- data[[ link_field]]
+  linkid <- match( linkid, unique( linkid)) # integer: first will be 1
+  probimp <- data[[ prob_field]]
+stopifnot(
+    all( probimp >= 0),
+    all( probimp <= 1)
+  )
+  
+  # Normalize probimp
+  sump <- tapply( probimp, INDEX= list( linkid), sum)
+  if( any( abs( log( sump)) > 0.01)){
+    warning( "Multimp probs seem a bit... under-normalized. FT4U, but ...")
+  }
+  mm <- match( linkid, as.integer( names( sump)), 0)
+  probimp <- probimp / sump[ mm]
+  
+  multab <- tabulate( linkid) # safe coz ints starting at 1
+  primary <- which( linkid == seq_along( linkid)) # only these responses are used
+  no_multi <- which( multab==1) # simples
+  multi <- primary %except% no_multi # first multimp for each m-case
+
+  # Organize data for efficient calcs: loop over number-of-multimps
+  xlinkid <- linkid
+  xlinkid[ primary] <- (-1L) # these are done
+  max_n_multi <- max( multab)
+  has_at_least <- nth_multi <- vector( 'list', max_n_multi)
+  # has_at_least[[1]] <- primary
+  for( im in 2 %upto% max_n_multi){
+    this_or_more <- which( multab >= im)
+    has_at_least[[ im]] <- this_or_more
+    nth_instance <- match( this_or_more, xlinkid)
+    nth_multi[[ im]] <- nth_instance
+    xlinkid[ nth_instance] <- (-1L) # won't be found again
+  }
+
+  # Multimpized version   
+  nlglk <- function( allpar){
+    beta <- allpar[[1]]
+    if( length( Slist)){
+      log_lambda <- allpar[[2]]
+      lambda <- exp( log_lambda)
+    }
+
+    ppn <- plogis( X %**% beta) # %**% to strip surplus dimension
+
+    prob <- 1+pifodds*ppn
+    # lprob <- log( 1+pifodds*ppn)
+    # lglk <- sum( lprob)
+    
+.   # Non-multi ones are thereby done (but can safely be Xed by PROBIMP of 1 :). 
+    # Accumulate multi ones into a shorter vector
+    prob <- prob * probimp
+    
+    for( im in 2 %upto% max_n_multi){
+      # Update only those cases with at least "im" multimps
+      prob[ has_at_least[[ im]] ] <- prob[ has_at_least[[ im]] ] +
+        prob[ nth_multi[[ im]] ] * probimp[ nth_multi[[ im]] ]
+    }
+    
+    lglk <- sum( log( prob[ primary]))
+
+    REPORT( beta)
+    REPORT( ppn)
+    # Penalties
+    for( i in seq_along( Slist)){
+      m_i <- dim( Slist[[ i]])[1]
+      irange <- seq( from=firsts[i], length=m_i)
+      spi <- smoopar_map[ i]
+      lglk <- lglk + 
+          + 0.5 * ranks[ i] * log_lambda[ spi] + 
+          - 0.5 * lambda[ spi] * beta[ irange] %**% Slist[[ i]] %**% beta[ irange]
+    }
+
+  return( -lglk)
+  }
+
+  guts_gasplit2() # all the GAM setup and fitting. Same as for 'gasplit2', but 'nlglk' is slightly different
+return( retlist)
 }
 
 
@@ -69,14 +192,58 @@ stopifnot( require( RTMB))
     ppn <- plogis( X %**% predict_from_previous$beta)
 return( ppn)
   }
+
+  nlglk <- function( allpar){
+    beta <- allpar[[1]]
+    if( length( Slist)){
+      log_lambda <- allpar[[2]]
+      lambda <- exp( log_lambda)
+    }
+
+    ppn <- plogis( X %**% beta) # %**% to strip surplus dimension
+    lprob <- log( 1+pifodds*ppn)
+    lglk <- sum( lprob)
+
+    REPORT( beta)
+    REPORT( ppn)
+    # Penalties
+    for( i in seq_along( Slist)){
+      m_i <- dim( Slist[[ i]])[1]
+      irange <- seq( from=firsts[i], length=m_i)
+      spi <- smoopar_map[ i]
+      lglk <- lglk + 
+          + 0.5 * ranks[ i] * log_lambda[ spi] + 
+          - 0.5 * lambda[ spi] * beta[ irange] %**% Slist[[ i]] %**% beta[ irange]
+    }
+
+  return( -lglk)
+  }
   
+  guts_gasplit2() # all the GAM setup and fitting. Separate function coz also used for 'gasplit_multimp'--- only 'nlglk' is different
+return( retlist)
+}
+
+
+"guts_gasplit2" <-
+function( nlocal=sys.parent()) mlocal({
   # Else (ie normally), we fit
   # Stuff needed for fit, but don't actually fit:
   G <- gam( formula=formula, data=data, fit=FALSE, ...) 
+  Gfake <- gam( formula=formula, data=data, G=G) # actually "fit" it, mainly for...
+  coef_names <- names( coef( Gfake))
+  nco <- length( coef_names)
+
+  # Tidy up the ingredients. I am not too sure about this, when multiple smooths are used eg with "id=1" in "by"..
+  
   X <- G$X
   y <- G$y
+  n_smoopar <- length( G$sp) # several smooths may share same smoopar...
+  smoopar_names <- names( G$sp)
+  smoopar_map <- integer()
+  
   Slengths <- unlist( FOR( G$smooth, length( .$S)))
   Slist <- list()
+  
   for( i in seq_along( G$smooth)){
     Si <- G$smooth[[i]]$S
     if( length( Si)){ # non-NULL, ie it's a smoother folks
@@ -84,9 +251,24 @@ return( ppn)
       if( !is.list( Si)){ # ... so let's make sure it does
         Si <- list( Si)
       }
+      
+      # Which smoopar(s) to use here? $first.sp and $last.sp are somehow related to expanded set of smoopars, not to the underlying ones that get optimzed over (eg if 'id' is used). I think matching on names is safest...
+      
+      spinds <- match( names( G$smooth[[i]]$sp), smoopar_names, 0)
+      if( length( spinds) != length( Si)){
+stop( sprintf(
+        "Not sure how to handle this: more smoopars than smoomats for %i-th smooth term", i))      
+      }
+      smoopar_map <- c( smoopar_map, spinds)
       Slist <- c( Slist, Si)
     }
   }
+  
+stopifnot( 
+    length( smoopar_map) == length( Slist),
+    all( smoopar_map > 0),
+    all( smoopar_map <= n_smoopar)
+  )
   
   # Separate rank for each penmat, if several...
   ranks <- unlist( FOR( G$smooth, .$rank))
@@ -105,53 +287,57 @@ return( ppn)
 
   pifodds <- d1( G$y) / d2( G$y) - 1
   
-  nlglk <- function( allpar){
-    beta <- allpar[[1]]
-    if( length( Slist)){
-      log_lambda <- allpar[[2]]
-      lambda <- exp( log_lambda)
-    }
+  # "Smoothers" (ie models with random effects) need slightly different treatment to fixed-effect models, in order to get eg Hessian. Fixed-eff models can of course also be fitted with gasplit(), but should be consistent here.
 
-    ppn <- plogis( X %**% beta) # %**% to strip surplus dimension
-    lprob <- log( 1+pifodds*ppn)
-    lglk <- sum( lprob)
-
-    REPORT( beta)
-    REPORT( ppn)
-    # Penalties
-    for( i in seq_along( Slist)){
-      m_i <- dim( Slist[[ i]])[1]
-      irange <- seq( from=firsts[i], length=m_i)
-      lglk <- lglk + 
-          + 0.5 * ranks[ i] * log_lambda[i] + 
-          - 0.5 * lambda[i] * beta[ irange] %**% Slist[[ i]] %**% beta[ irange]
-    }
-
-  return( -lglk)
-  }
+  if( length( Slist)){ # smooths. Two-stage fit (see below):
+    # NB: I think mgcv might allow constraining smoopars (ie several to take same value). NYI here; would need "map" 
   
-  if( length( Slist)){ # smooths
     allparz <- list( 
         beta= c( mean( pifodds>0), rep( 0, ncol( X)-1)),
-        log_lambda= rep( 0.01, length( Slist)))
+        log_lambda= rep( 0.01, n_smoopar))
 
-    obj <- RTMB::MakeADFun( nlglk, allparz, random="beta")
-  } else {
-    # Fixed effects only: should match gasplit(), but use RTMB anyway
+    obj_outer <- RTMB::MakeADFun( nlglk, allparz, random="beta")
+    outer_pars <- obj_outer$par
+    obj_outer$fn( outer_pars) # test here before nlminb()
+    
+    # Can't use nlminb coz often 1D (1 smoopar)! Only the RE var is "outer"
+    opto <- with( obj_outer, optim( par, fn, gr, method='BFGS'))
+    outer_pars <- opto$par
+
+    # I'm happy with variances conditional on estimated outer pars (ie just log_lambda). RTMB does not yield that up easily, but we can re-fit with log_lambda fixed, and no "random effects":
+
+    # Might as well start at the inner optimum...
+    allparz$beta[] <- obj_outer$env$last.par.best[ 1:nco] 
+    
+    # Fix the "outer" par(s)
+    allparz$log_lambda <- outer_pars
+    fix_log_lambda <- list( log_lambda= factor( NA+allparz$log_lambda))
+    obj <- RTMB::MakeADFun( nlglk, allparz, map=fix_log_lambda)
+    fitto <- with( obj, nlminb( par, fn, gr))
+  } else { # FIXED EFFECTS ONLY
+    # Should match gasplit(), but use RTMB anyway
     allparz <- list( beta= c( mean( pifodds>0), rep( 0, ncol( X)-1)))
     obj <- RTMB::MakeADFun( nlglk, allparz)
+    
+    obj$fn( obj$par) # test here before nlminb()    
+    fitto <- nlminb( obj$par, obj$fn, obj$gr)    
+    outer_pars <- numeric(0)
   }
+
+  rep <- obj$report()
+  names( rep$beta) <- coef_names  
   
-  obj$fn( obj$par) # test here before nlminb()
-  fitto <- nlminb( obj$par, obj$fn, obj$gr)
-  obj <- c( 
-      obj, 
-      list( G=G),
-      obj$report(), # beta and ppn
+  H <- obj$he( fitto$par)
+  dimnames( H) <- list( coef_names, coef_names)
+  rep$V_beta <- solve( H)
+  rep$SE_beta <- sqrt( diag( rep$V_beta))
+  
+  retlist <- c( 
+      rep, # beta, SE, V, ppn
+      returnList( G, outer_pars, obj),      
       fitto[ cq( convergence, message, evaluations)]
     )
-return( obj)
-}
+})
 
 
 "make_fake_ppns" <-

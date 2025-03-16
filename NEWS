@@ -1,1 +1,5 @@
-v1.1.0 : Added support for 'mgcv' smoothers, thx2 'RTMB'. This is currently in separate 'gasplit2' function; note that the return-value is fundamentally different to that of 'gasplit', coz the latter doesn't use 'RTMB'. 
+1.3.0: Added multiple-imputation via 'gasplit_multimp'; fixed (some) smoothy bugs
+
+1.2.0: Added variance estimates (for parameters; beyond that is up to the user) and similarized the return-values of 'gasplit' and 'gasplit2'.
+
+1.1.0 : Added support for 'mgcv' smoothers, thx2 'RTMB'. This is currently in separate 'gasplit2' function; note that the return-value is fundamentally different to that of 'gasplit', coz the latter doesn't use 'RTMB'. 
