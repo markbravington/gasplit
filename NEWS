@@ -1,4 +1,4 @@
-1.3.0: Added multiple-imputation via 'gasplit_multimp'; fixed (some) smoothy bugs
+1.3.3: Added missing-covariate (MAR) option via 'gasplit_missy', along with 'example_prep4missy' and 'babydat'; fixed (some) smoothy bugs
 
 1.2.0: Added variance estimates (for parameters; beyond that is up to the user) and similarized the return-values of 'gasplit' and 'gasplit2'.
 

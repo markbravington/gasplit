@@ -1,7 +1,7 @@
 \name{gasplit}
 \alias{gasplit}
 \alias{gasplit2}
-\alias{gasplit_multimp}
+\alias{gasplit_missy}
 \title{Flexible models for 2-category proportions from continuous data}
 \description{
 Suppose your data each come from one or the other of two categories (say, Eastern or Western Atlantic). You don't know for sure which one, but you do have a "measurement" for each one (say, a log-likelihood ratio) which tends to be high for one category and low for the other, with an a-priori-known distribution for each category (say, based on other samples of known category).
@@ -20,10 +20,17 @@ to fit a two-way model with no interactions, to a dataset with covariates "year"
 
 Having fitted your model, you can make a subsequent call to predict the proportion for (presumably) new covariate values, via the \code{predict_from_previous} argument..
 
-If you want to use smoothers, i.e. \code{s()} terms a la \code{mgcv} (including non-sparse random effects handled via \code{s(bs="re")}), then you should call \code{gasplit2} instead. The latter requires package \pkg{RTMB}, in order to estimate smoothing parameters/random-effect variances. Results should be the same as \code{gasplit} if there are no smooth terms nor random effects; IDNK which routine is faster. NDIRC (Nor Do I Really Care.) If your covariates have missing values and you want multiple imputation, see next subsection for \code{gasplit_multimp}.
+If you want to use smoothers, i.e. \code{s()} terms a la \code{mgcv} (including non-sparse random effects handled via \code{s(bs="re")}), then you should call \code{gasplit2} instead. The latter requires package \pkg{RTMB}, in order to estimate smoothing parameters/random-effect variances. Results should be the same as \code{gasplit} if there are no smooth terms nor random effects; IDNK which routine is faster. NDIRC (Nor Do I Really Care.) If your covariates have missing values (MAR), you can do "full information maximum likelihood" using \code{gasplit_missy}, described next.
 
-See \bold{Examples} of \code{\link{test_gasplit}} (qv) for practical stuff. I should update that for smoothers and multimp.
-\subsection{Multiple imputation}{\code{gasplit_multimp} can handle missing values in discrete covariates, though \emph{you} have to have already done your homework by fitting sub-models that predict the probabilities of the different possible covariate values for each case. Your data will need two extra columns, by default assumed to be called \code{MULTIMP} and \code{PROBIMP} though you can change that. \code{MULTIMP} holds the "case number", so that a multiply-imputed case will appear several times with the same value for some of its columns (including \code{MULTIMP} and the response variable), but different values for the missing covariate(s) in each imputation. The probabilities of those alternative imputed values are in \code{PROBIMP}, from that submodel(s) you've fitted. Cases with no (relevant) missing covariates should have a unique \code{MULTIMP} so they only appear once, and a \code{PROBIMP} of 1. \code{MULTIMP} does not have to contain numbers; any unique case-identifier will do. Fitted values are only returned for the first occurence of each case, but are based on all imputations of that case. Predictions on new data don't allow for missing covariates, and the new data does not need \code{MULTIMP} or \code{PROBIMP} fields.
+See \bold{Examples} of \code{\link{test_gasplit}} (qv) for practical stuff. I should update that for smoothers and missy.
+\subsection{Missing covariates}{
+\code{gasplit_missy} can handle Missing-At-Random (MAR) values in covariates via "full information maximum likelihood", though \emph{you} have to have already done your homework by fitting sub-models that predict the probabilities of the different possible covariate values for each case. The covariate(s) should be intrinsically discrete, or reasonably discretizable; if they are continuous, a good approximation would be use a few quantiles of their conditional distribution.
+
+Your data will be a copy of the original dataset with extra rows added (one or more extra rows each case with missing covariates), and two extra columns, by default assumed to be called \code{MULTIMP} and \code{PROBIMP} though you can change that. Their meaning (which is very simple) is explained in the next paragraph. You might find it helpful to look at an example in \code{\link{example_prep4missy}} (qv), and the test dataset \code{\link{babydat}}. (It's not for use in actually fitting \code{gasplit_missy}--- just showing how the data prep works.)
+
+\code{MULTIMP}--- a misnomer really, since this is actually FIML not "multiple implementation"--- should hold the "case number", so that a missing-covariate case will appear several times with the same value for some of its columns (including \code{MULTIMP} and the response variable), but different values for the missing covariate(s) in each appearance (which I might loosely call each "imputation"). The probabilities of those alternative covariate values are in \code{PROBIMP}, from that submodel(s) you've fitted (which will usually be conditional on the covariates that \emph{are} observed). Cases with no (relevant) missing covariates should have a unique \code{MULTIMP} so they only appear once, and a \code{PROBIMP} of 1. \code{MULTIMP} does not have to contain numbers; any unique case-identifier will do. Fitted values are only returned for the first occurence of each case, but take into account all "imputations" of that case. Predictions on new data don't allow for missing covariates, and the new data does not need \code{MULTIMP} or \code{PROBIMP} fields.
+
+If there are cases where several covariates have missing values, then in principle you should produce extra rows for all combinations of possible values for that case. That could get messy for you, but fortunately it's not \emph{my} problem; \emph{you} might decide to do Multiple-Imputation instead (though it is less statistically efficient, and more fiddly).
 }
 \subsection{Disclaimer}{
 I've tried to support most \code{mgcv} features that I more-or-less understand. For example, I \emph{think} \code{gasplit2} can cope with \code{s(...,id=...)}. However:
@@ -48,7 +55,7 @@ gasplit2(
   predict_from_previous= NULL,
   ... # for gam()
 )
-gasplit_multimp(
+gasplit_missy(
   formula,
   data,
   d1, d2,
@@ -62,9 +69,9 @@ gasplit_multimp(
 \item{ data}{a dataframe...}
 \item{ d1, d2}{ these are \emph{functions} giving the PDF of the response variable for category-1 and category-2 samples. You gotta pre-fit those to other data. See \bold{Examples}.}
 \item{ start}{(just \code{gasplit}, not \code{gasplit2}). Either a scalar (probably close to 0) which will be used for all coefficients, or a vector with length \code{ncol(<model matrix>)}. TBH I'd leave it blank; the default will prolly work.}
-\item{ link_field, prob_field}{what names the multiple-imputation columns have.}
+\item{ link_field, prob_field}{what names the missing-data columns columns have. Probably simpler to make sure your dataset has them under the default names.}
 \item{ predict_from_previous}{Optional result from a previous call to \code{gasplit}. If set, then no fitting will happen, but \code{gasplit} will make predictions at the (presumably new) values of \code{data}, based on the parameters of the previous fit.}
-\item{ ...}{for \code{gasplit2} and \code{gasplit_multimp} only, additional args to \code{mgcv::gam} (qv), eg \code{knots}.}
+\item{ ...}{for \code{gasplit2} and \code{gasplit_missy} only, additional args to \code{mgcv::gam} (qv), eg \code{knots}.}
 }
 \value{
 If \code{predict_from_previous} is supplied (and \code{data}, of course), all three functions return predicted proportions at each row of \code{data} (without SEs--- I prolly orta add that).
@@ -72,7 +79,7 @@ Otherwise, the functions return a list, with various elements:
 \item{ beta, SE_beta, V_beta}{for the raw paraameter estimates;}
 \item{ ppn}{estimated proportions, casewise;}
 \item{ G}{setup for the underlying \code{\link{gam}}, so eg \code{G$X} is the design matrix}
-plus various convergence diagnostics. \code{gasplit2} and \code{gasplit_multimp} also returns \code{obj} which is the \code{RTMB} object (from \code{MakeADFun}) after fitting, plus the estimated "outer parameters" (smoothing parameters and/or random-effect variances) as \code{outerpars} (NB probably on log scale). The latter are treated as fixed when computing the coefficient Hessian, i.e. there's no Bayes-Empirical-Bayes correction.
+plus various convergence diagnostics. \code{gasplit2} and \code{gasplit_missy} also returns \code{obj} which is the \code{RTMB} object (from \code{MakeADFun}) after fitting, plus the estimated "outer parameters" (smoothing parameters and/or random-effect variances) as \code{outerpars} (NB probably on log scale). The latter are treated as fixed when computing the coefficient Hessian, i.e. there's no Bayes-Empirical-Bayes correction.
 }
 \details{
 Given parameters \code{beta} and a model-matrix \code{X} from the formula, the log-likelihood of observation \code{i} with response \code{y_i} is:
@@ -81,13 +88,21 @@ Given parameters \code{beta} and a model-matrix \code{X} from the formula, the l
   log( ppn_i*d1( y_i) + (1-ppn_i)*d2( y_i))
 }
 
-where \code{ppn_i = inv.logit( sum_j{ X_{i,j} *beta_j})}. The log-likelihood extracts the constant factor d2(y_i), to leave (in the non-multimp case)
+where \code{ppn_i = inv.logit( sum_j{ X_{i,j} *beta_j})}. The log-likelihood extracts the constant factor d2(y_i), to leave (in the non-missy case)
 
 \preformatted{
   log( 1 + ppn_i*(d1_i/d2_i-1)) + const
 }
 
-For multiple imputation of one or more covariates \code{z}, this becomes
+In a general setting, when a covariate \code{z_i} is missing for case \code{i} but other covariates \code{x_i} may be observed, the FIML log-lik of an observation \code{y_i} is
+
+\preformatted{
+  log( sum_z{ Pr[y_i|x_i,z] * Pr[Z_i=z|x_i]})
+}
+
+where the sum ranges over possible values \code{z} that the random variable \code{Z_i} might take, and the second prob is your "submodel". The point here is that the weighted sum is (and should be) applied to the \emph{unlogged} probabilities, \emph{before} the whole lot gets logged finally. That's why the code needs to be adapted.
+
+For our particular application, this becomes:
 
 \preformatted{
   log( sum_z{ (ppn_i(z)*d1( y_i) + (1-ppn_i(z))*d2( y_i)) * prob(z_i=z)}
@@ -99,8 +114,9 @@ with some obvious & harmless abuse of notation.
 Smoothers and random-effects add "penalties" (ie priors) on the coefficients in the usual \code{mgcv} way, and \code{RTMB} computes the automated Laplace approximation required for consistent estimation of smoopars/RE-variances.
 }
 \examples{
-?test_gasplit
+?test_gaspli
+?example_prep4gasplit
 }
-\seealso{test.gasplit
+\seealso{test_gasplit, example_prep4gasplit
 }
 \keyword{misc}

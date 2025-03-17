@@ -1,5 +1,26 @@
 # This is package gasplit 
 
+"example_prep4missy" <-
+function( data){
+## Make an extended version of 'data' where missing-Sex is replaced by multimps (multiple imputation). Use actual Sex if known. Otherwise, add extra rows with alternative sex and use PrFem_yl
+
+  unk <- is.na( data$Sex)
+  data <- within( data, {
+    MULTIMP <- seq_along( Sex) # label
+    PROBIMP <- ifelse( !is.na( Sex), 1, PrFem_yl)    
+    Sex[ is.na( Sex)] <- 'F' # will be 'M' in the extra alternatives
+  })
+  
+  extroid <- within( data[ unk,], {
+    MULTIMP <- which( unk)
+    Sex[] <- 'M'
+    PROBIMP <- 1-PrFem_yl
+  })
+  
+return( rbind( data, extroid))
+}
+
+
 "gasplit" <-
 function( 
     formula, 
@@ -53,7 +74,7 @@ return( c( returnList(
 }
 
 
-"gasplit_multimp" <-
+"gasplit_missy" <-
 function( 
   formula, 
   data, 
@@ -87,7 +108,7 @@ return( ppn)
 return( eval.parent( mc))
   }
 
-  # Prepare for multimp  
+  # Prepare for FIML, integrating over all "imputations" of each case:
   if( any( c( link_field, prob_field)  %in% all.names( formula))) {
 stop( "WHAAAAT are you thinking??? Link & prob fields don't belong in formula!")
   }
@@ -303,8 +324,9 @@ stopifnot(
     outer_pars <- obj_outer$par
     obj_outer$fn( outer_pars) # test here before nlminb()
     
-    # Can't use nlminb coz often 1D (1 smoopar)! Only the RE var is "outer"
+    # Can't reliably use nlminb coz often 1D (1 smoopar)! Only the RE var is "outer"
     opto <- with( obj_outer, optim( par, fn, gr, method='BFGS'))
+    opto$evaluations <- opto$counts # similar to nlminb
     outer_pars <- opto$par
 
     # I'm happy with variances conditional on estimated outer pars (ie just log_lambda). RTMB does not yield that up easily, but we can re-fit with log_lambda fixed, and no "random effects":
@@ -323,12 +345,13 @@ stopifnot(
     obj <- RTMB::MakeADFun( nlglk, allparz)
     
     obj$fn( obj$par) # test here before nlminb()    
-    fitto <- nlminb( obj$par, obj$fn, obj$gr)    
+    opto <- nlminb( obj$par, obj$fn, obj$gr)    
     outer_pars <- numeric(0)
   }
 
   rep <- obj$report()
-  names( rep$beta) <- coef_names  
+  names( rep$beta) <- coef_names
+  rep$ppn <- c( rep$ppn) # strip dim that makes it a 1D array! Grrr...
   
   H <- obj$he( fitto$par)
   dimnames( H) <- list( coef_names, coef_names)
@@ -338,7 +361,7 @@ stopifnot(
   retlist <- c( 
       rep, # beta, SE, V, ppn
       returnList( G, outer_pars, obj),      
-      fitto[ cq( convergence, message, evaluations)]
+      opto[ cq( convergence, message, evaluations)]
     )
 })
 

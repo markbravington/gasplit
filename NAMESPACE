@@ -1,8 +1,10 @@
-export( "gasplit",
-"gasplit_multimp",
+export( "example_prep4missy",
+"gasplit",
+"gasplit_missy",
 "gasplit2",
 "make_fake_ppns",
-"test_gasplit")
+"test_gasplit",
+"babydat")
 import( mvbutils)
 import( atease)
 import( mgcv)
