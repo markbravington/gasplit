@@ -17,6 +17,6 @@ Remember that \emph{you} have to develop whatever submodel for probabilities of 
 }
 \examples{
 babydat      # with some missing values for 'Sex'
-example_prepare4missy( babydat)
+example_prep4missy( babydat)
 }
 \keyword{misc}

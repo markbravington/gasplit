@@ -34,7 +34,7 @@ function(
     # Result is garbage here!
     G <- gam( G=predict_from_previous$G)
     X <- predict( G, newdata=data, type='lpmatrix')
-    ppn <- plogis( X %*% pars)
+    ppn <- plogis( X %*% predict_from_previous$beta)
 return( ppn)
   }
 
@@ -85,8 +85,6 @@ function(
   ... # for gam()
 ){
 ## Allow REs (eg to do splines) and mgcv-style stuff
-stopifnot( require( RTMB))
-
   if( !is.null( predict_from_previous)){
     # I think we have to actually "fit" the gam, so that we can use predict()
     # Result is garbage here!
@@ -205,8 +203,6 @@ function(
   ... # for gam()
 ){
 ## Allow REs (eg to do splines) and mgcv-style stuff
-stopifnot( require( RTMB))
-
   if( !is.null( predict_from_previous)){
     # I think we have to actually "fit" the gam, so that we can use predict()
     # Result is garbage here!
@@ -345,7 +341,7 @@ stopifnot(
     obj <- RTMB::MakeADFun( nlglk, allparz)
     
     obj$fn( obj$par) # test here before nlminb()    
-    opto <- nlminb( obj$par, obj$fn, obj$gr)    
+    fitto <- nlminb( obj$par, obj$fn, obj$gr)    
     outer_pars <- numeric(0)
   }
 
@@ -361,7 +357,7 @@ stopifnot(
   retlist <- c( 
       rep, # beta, SE, V, ppn
       returnList( G, outer_pars, obj),      
-      opto[ cq( convergence, message, evaluations)]
+      fitto[ cq( convergence, message, evaluations)]
     )
 })
 
@@ -377,7 +373,13 @@ function(
   prange= 1,
   seed= 2
 ){
-stopifnot( require( 'offarray'))
+  if( !requireNamespace( 'offarray')){
+stop( "This demo function requires 'offarray' package")
+  }
+  
+  # Faaaaaaaaaaaaark the Craniacs are on the loose
+  offarray <- offarray::offarray
+  autoloop <- offarray::autoloop
 
   YEARS <- 'Y' %&% (2000 + 1:nyears)
   ZONES <- LETTERS[ 1:nzones]
