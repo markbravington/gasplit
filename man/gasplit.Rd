@@ -18,7 +18,7 @@ Now you want to estimate the proportion of category-1 samples in your data, but 
 
 to fit a two-way model with no interactions, to a dataset with covariates "year" and "region" based on a measurement "LGLR".
 
-Having fitted your model, you can make a subsequent call to predict the proportion for (presumably) new covariate values, via the \code{predict_from_previous} argument..
+Having fitted your model, you can make a subsequent call to predict the proportion for (presumably) new covariate values, via the \code{predict_from_previous} argument. And, provided that your "measurement" really is a log-likelihood ratio, you can also calculate a posterior probability (of being category-1) for each case, using \code{\link{posterior}}.
 
 If you want to use smoothers, i.e. \code{s()} terms a la \code{mgcv} (including non-sparse random effects handled via \code{s(bs="re")}), then you should call \code{gasplit2} instead. The latter requires package \pkg{RTMB}, in order to estimate smoothing parameters/random-effect variances. Results should be the same as \code{gasplit} if there are no smooth terms nor random effects; IDNK which routine is faster. NDIRC (Nor Do I Really Care.) If your covariates have missing values (MAR), you can do "full information maximum likelihood" using \code{gasplit_missy}, described next.
 
@@ -71,13 +71,16 @@ gasplit_missy(
 \item{ start}{(just \code{gasplit}, not \code{gasplit2}). Either a scalar (probably close to 0) which will be used for all coefficients, or a vector with length \code{ncol(<model matrix>)}. TBH I'd leave it blank; the default will prolly work.}
 \item{ link_field, prob_field}{what names the missing-data columns columns have. Probably simpler to make sure your dataset has them under the default names.}
 \item{ predict_from_previous}{Optional result from a previous call to \code{gasplit}. If set, then no fitting will happen, but \code{gasplit} will make predictions at the (presumably new) values of \code{data}, based on the parameters of the previous fit.}
+\item{ dbeta}{whether to calculate derivatives of each prediction WRTO the parameters (for variance calculations).}
 \item{ ...}{for \code{gasplit2} and \code{gasplit_missy} only, additional args to \code{mgcv::gam} (qv), eg \code{knots}.}
 }
 \value{
-If \code{predict_from_previous} is supplied (and \code{data}, of course), all three functions return predicted proportions at each row of \code{data} (without SEs--- I prolly orta add that).
+If \code{predict_from_previous} is supplied (and \code{data}, of course), all three functions return predicted proportions at each row of \code{data}. If \code{dbeta==TRUE} then the result will be not a vector, but a matrix whose first column is the point estimate, the remaining columns being its derivatives WRTO the elements of \code{beta}. You can use that to get standard errors on the predictions, something like this:
+%#
+\item{  t( ppn[,-1]) \%**\% V_beta \%**\% ppn[,-1]}{}
 Otherwise, the functions return a list, with various elements:
 \item{ beta, SE_beta, V_beta}{for the raw paraameter estimates;}
-\item{ ppn}{estimated proportions, casewise;}
+\item{ ppn}{estimated proportions, casewise (or a matrix if \code{dbeta==TRUE});}
 \item{ G}{setup for the underlying \code{\link{gam}}, so eg \code{G$X} is the design matrix}
 plus various convergence diagnostics. \code{gasplit2} and \code{gasplit_missy} also returns \code{obj} which is the \code{RTMB} object (from \code{MakeADFun}) after fitting, plus the estimated "outer parameters" (smoothing parameters and/or random-effect variances) as \code{outerpars} (NB probably on log scale). The latter are treated as fixed when computing the coefficient Hessian, i.e. there's no Bayes-Empirical-Bayes correction.
 }
@@ -114,7 +117,7 @@ with some obvious & harmless abuse of notation.
 Smoothers and random-effects add "penalties" (ie priors) on the coefficients in the usual \code{mgcv} way, and \code{RTMB} computes the automated Laplace approximation required for consistent estimation of smoopars/RE-variances.
 }
 \examples{
-?test_gaspli
+?test_gasplit
 ?example_prep4gasplit
 }
 \seealso{test_gasplit, example_prep4gasplit

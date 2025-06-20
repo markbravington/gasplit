@@ -3,6 +3,7 @@ export( "example_prep4missy",
 "gasplit_missy",
 "gasplit2",
 "make_fake_ppns",
+"posterior",
 "test_gasplit",
 "babydat")
 import( mvbutils)

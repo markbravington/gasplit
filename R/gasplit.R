@@ -1,5 +1,27 @@
 # This is package gasplit 
 
+"do_predict_from_previous" <-
+function( nlocal=sys.parent()) mlocal({
+  # I think we have to actually "fit" the gam, so that we can use predict()
+  # Result is garbage here!
+  # Maybe this could be sped up by using existing estimates as startvals
+  
+  PFP <- predict_from_previous # brevity
+  G <- gam( G=PFP$G)
+  # predict.gam() requires data to be either bona fide dataframe, or missing
+  X <- if( is.null( data)) predict( G, type='lpmatrix') else
+      predict( G, newdata=data, type='lpmatrix')
+  linpred <- X %**% PFP$beta
+  ppn <- plogis( linpred)
+
+  if( dbeta){
+    dbeta <- dlogis( linpred) * X
+    # check_dbeta <- numvbderiv( function( b) plogis( X %**% b), PFP$beta)
+    ppn <- cbind( ppn, dbeta)
+  }
+})
+
+
 "example_prep4missy" <-
 function( data){
 ## Make an extended version of 'data' where missing-Sex is replaced by multimps (multiple imputation). Use actual Sex if known. Otherwise, add extra rows with alternative sex and use PrFem_yl
@@ -27,14 +49,11 @@ function(
     data, 
     d1, d2, 
     start=0.001, 
-    predict_from_previous=NULL
+    predict_from_previous=NULL,
+    dbeta= FALSE
 ){
   if( !is.null( predict_from_previous)){
-    # I think we have to actually "fit" the gam, so that we can use predict()
-    # Result is garbage here!
-    G <- gam( G=predict_from_previous$G)
-    X <- predict( G, newdata=data, type='lpmatrix')
-    ppn <- plogis( X %*% predict_from_previous$beta)
+    do_predict_from_previous()
 return( ppn)
   }
 
@@ -46,7 +65,7 @@ return( ppn)
   ppn <- 0*pifodds - 1
   
   nlglk <- function( pars){
-    ppn <<- plogis( X %*% pars)
+    ppn <<- plogis( X %**% pars)
     # prob = d1 * ppn + d2 * (1-ppn)
     # = ppn * (d1 - d2) + d2
     # = d2 * ( ppn * (d1/d2-1) + 1)
@@ -63,11 +82,19 @@ stopifnot( length( start)==ncol( X))
   fitto <- optim( start, nlglk, method='BFGS', hessian=TRUE,
       control=list( trace=5))
       
+  beta <- fitto$par    
   V_beta <- solve( fitto$hessian)
   SE_beta <- sqrt( diag( V_beta))
 
+  if( dbeta){
+    linpred <- X %**% fitto$par
+    dbeta <- dlogis( linpred) * X
+    ppn <- cbind( ppn, dbeta)
+  }
+
+
 return( c( returnList( 
-    beta=fitto$par, SE_beta, V_beta,
+    beta, SE_beta, V_beta,
     ppn, G),
     fitto[ cq( convergence, message, evaluations)]
   ))
@@ -82,19 +109,9 @@ function(
   link_field= 'MULTIMP',
   prob_field= 'PROBIMP',
   predict_from_previous=NULL,
+  dbeta= FALSE,
   ... # for gam()
 ){
-## Allow REs (eg to do splines) and mgcv-style stuff
-  if( !is.null( predict_from_previous)){
-    # I think we have to actually "fit" the gam, so that we can use predict()
-    # Result is garbage here!
-    # Maybe this could be sped up by using existing estimates as startvals
-    G <- gam( G=predict_from_previous$G)
-    X <- predict( G, newdata=data, type='lpmatrix')
-    ppn <- plogis( X %**% predict_from_previous$beta)
-return( ppn)
-  }
-  
   if( !all( hasName( data, c( link_field, prob_field)))){
     warning( sprintf( 
       "Fields '%s' and/or '%s' not found; calling 'gasplit2' for ya instead",
@@ -104,6 +121,13 @@ return( ppn)
     mc <- match.call( expand.dots=TRUE)
     mc[[1]] <- quote( 'gasplit2')
 return( eval.parent( mc))
+  }
+
+  if( !is.null( predict_from_previous)){
+    do_predict_from_previous()
+    
+    # DEAL WITH AGGREGATION...
+return( ppn)    
   }
 
   # Prepare for FIML, integrating over all "imputations" of each case:
@@ -200,17 +224,13 @@ function(
   data, 
   d1, d2, 
   predict_from_previous=NULL,
+  dbeta= FALSE,
   ... # for gam()
 ){
 ## Allow REs (eg to do splines) and mgcv-style stuff
   if( !is.null( predict_from_previous)){
-    # I think we have to actually "fit" the gam, so that we can use predict()
-    # Result is garbage here!
-    # Maybe this could be sped up by using existing estimates as startvals
-    G <- gam( G=predict_from_previous$G)
-    X <- predict( G, newdata=data, type='lpmatrix')
-    ppn <- plogis( X %**% predict_from_previous$beta)
-return( ppn)
+    do_predict_from_previous()
+return( ppn)    
   }
 
   nlglk <- function( allpar){
@@ -353,12 +373,21 @@ stopifnot(
   dimnames( H) <- list( coef_names, coef_names)
   rep$V_beta <- solve( H)
   rep$SE_beta <- sqrt( diag( rep$V_beta))
-  
+
   retlist <- c( 
       rep, # beta, SE, V, ppn
       returnList( G, outer_pars, obj),      
       fitto[ cq( convergence, message, evaluations)]
     )
+
+  if( dbeta){
+    #  ppn <- plogis( G$X %**% beta)
+    linpred <- G$X %**% rep$beta
+    dbeta <- dlogis( linpred) * G$X
+    # check_dbeta <- numvbderiv( function( b) plogis( G$X %**% b), rep$beta)
+
+    retlist$ppn <- cbind( retlist$ppn, dbeta)
+  }
 })
 
 
@@ -423,6 +452,48 @@ stop( "This demo function requires 'offarray' package")
   dfall@truth <- returnList( yeff, zeff, yzeff, df_t, 
       meanE, ppnE, samp_ppnE, prange, seed)
 return( dfall)
+}
+
+
+"posterior" <-
+function( object, newdata=NULL, dbeta=FALSE){
+## Assumes that the response is a LOG-LIKELIHOOD RATIO... 
+## ... don't run this on any-old-rubbish
+
+
+  pE <- NULL # make it below  
+  if( is.null( newdata)){
+    LGLR <- object$G$y
+    if( !dbeta){
+      pE <- object$ppn # fitted
+    }
+  } else {
+    # Response variable (perhaps transformed, as per formula)
+    LGLR <- eval( object$G$formula[[2]], newdata)
+  }
+  
+  if( is.null( pE)){
+    # Use gasplit2, even if original was gasplit()
+    pE <- gasplit2( data=newdata, predict_from_previous=object, 
+        dbeta=dbeta)
+  }
+  
+  Prat <- exp( -LGLR)
+  pEv <- if( dbeta) pE[,1] else pE
+  posterior <- 1/( 1+Prat*(1/pEv-1))
+  
+  if( dbeta){
+    # D( quote( 1/( 1+Prat*(1/pE-1))), 'pE')
+    DpE <-  Prat * (1/pEv^2)/(1 + Prat * (1/pEv - 1))^2
+    dpost_dbeta <- DpE * pE # pE is "really" cbind( pE, dpE/dbeta)
+    dpost_dbeta[,1] <- posterior
+    posterior <- dpost_dbeta
+  }
+    
+  # 1/( 1+Prat*(1/pE-1))
+  
+  # No multimp yet
+return( posterior)
 }
 
 
