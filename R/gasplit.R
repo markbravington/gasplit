@@ -489,10 +489,7 @@ function( object, newdata=NULL, dbeta=FALSE){
     dpost_dbeta[,1] <- posterior
     posterior <- dpost_dbeta
   }
-    
-  # 1/( 1+Prat*(1/pE-1))
   
-  # No multimp yet
 return( posterior)
 }
 

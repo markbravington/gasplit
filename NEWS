@@ -1,4 +1,4 @@
-1.4.0: Added 'posterior', and the 'dbeta' argument for derivs (useful for variance).
+1.4.0: Added 'posterior', and the 'dbeta' argument to 'gasplit' and 'posterior' for derivs (useful for variance and variance-propagation).
 
 1.3.3: Added missing-covariate (MAR) option via 'gasplit_missy', along with 'example_prep4missy' and 'babydat'; fixed (some) smoothy bugs
 

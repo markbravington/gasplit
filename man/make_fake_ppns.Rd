@@ -37,7 +37,7 @@ test_gasplit(
 \examples{
 if( require( offarray))\{
 sim2 <- make_fake_ppns(
-    meanE= -2, # not-brilliant separation
+    meanE= +2, # not-brilliant separation
     mean_nsamp=200, # reasonable samp sizes
     interpow=0) # no interactoins
 hist( sim2$LGLR, nc=40) # to see how good the separation is
@@ -56,6 +56,7 @@ if( FALSE)\{
   pfit <- gasplit( myform, mydata)
   ppred <- gasplit( data=newmydata, predict_from_previous=pfit)
 \}
+# See also *Examples* for 'posterior'
 \}
 }
 \keyword{misc}

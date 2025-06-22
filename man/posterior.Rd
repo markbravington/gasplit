@@ -2,11 +2,11 @@
 \alias{posterior}
 \title{Posterior probability}
 \description{
-After fitting a \code{\link{gasplit}} (or \code{\link{gasplit2}} or \code{\link{gasplit_missy}}) model to estimate the \emph{prior} probability of whateverness by covariates, you can calculate a per-observation \emph{posterior} probability.
+After fitting a \code{\link{gasplit}} model to estimate the \emph{prior} probability of whateverness by covariates, you can calculate a per-observation \emph{posterior} probability.
 
 The posteriors are also estimates, since they depend on the estimated model coefficients \code{beta}. You can also get their derivatives WRTO the coefficients (useful for downstream variance propagation).
 
-If the original model used multiple imputation (\code{\link{gasplit_missy}}), then the posterior for a case is the weighted sum of posteriors for each of its imputations, and likewise for the derivs. The result is inserted only for the first imputation; ; the rest are all set to NA.
+There's no attempt to predict "properly" for multiple imputations. You can DIY by predicting for each case, and manually weighted-summing the predictions; the mean will be OK. However, uncertainty won't be fully propagated. I reckon that's a NFN...
 \subsection{Requirement}{\code{posterior} \bold{assumes} that your discrimination statistic is actually a log-likelihood ratio--- not just some arbitrary stat that you made up, not a LGLR multiplied by 3, etc...
 }
 }
@@ -22,9 +22,8 @@ If the original model used multiple imputation (\code{\link{gasplit_missy}}), th
 \seealso{\code{\link{gasplit}}, \code{\link{gasplit_missy}}
 }
 \examples{
-# ?test_gasplit
 sim2 <- make_fake_ppns(
-    meanE= -2, # not-brilliant separation
+    meanE= +2, # not-brilliant separation
     mean_nsamp=200, # reasonable samp sizes
     interpow=0) # no interactoins
 hist( sim2$LGLR, nc=40)
@@ -32,6 +31,10 @@ test <- test_gasplit( sim2)
 with( test, plot( tru_ppnE, fit_ppnE))
 abline( 0,1)
 posty <- posterior( test$gg1, dbeta=TRUE)
-plot( inv.logit( sim2$LGLR), posty[,1])
+plot( sim2$LGLR, logit( posty[,1]), pch='.')
+abline( 0,1,col='red')
+# ... Points with high LGLR tend to pushed upwards in the posterior
+# ... which makes sense, coz if you've got high LGLR, your neighbours prolly will too
+# ... so your prior would be pushed up
 }
 \keyword{misc}
