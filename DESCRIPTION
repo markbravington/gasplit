@@ -6,4 +6,4 @@ Maintainer: Mark Bravington <markb2@summerinsouth.net>
 Imports: mvbutils, atease, mgcv, RTMB
 Suggests: offarray
 License: GPL-3
-Version: 1.4.3
+Version: 1.4.8

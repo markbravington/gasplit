@@ -3,7 +3,7 @@
 \alias{test_gasplit}
 \title{Simulate dataset for 'gasplit'}
 \description{
-\code{make_fake_ppns} simulates a dataset for fitting with \code{\link{gasplit}}, using two factors \code{Y} and \code{Z} and giving a response variable \code{LGLR} (so the strata are all combinations of \code{Y} and \code{Z}). You can control the number of factor-levels, distributions of \code{LGLR} for category-1 and category-2 observations (and thus the "power" of \code{LGLR} for assignment), the number of samples per stratum, the average strength of each Y-effect and Z-effect, the average strength of Y*Z interactions, etc. It requires the \pkg{offarray} package (purely for my programming convenience; it's not apparent in the output).
+\code{make_fake_ppns} simulates a dataset for fitting with \code{\link{gasplit}}, using two factors \code{Y} and \code{Z} and giving a response variable \code{DISCOSTAT}; the strata comprise all combinations of \code{Y} and \code{Z}. You can control the number of factor-levels, distributions of \code{DISCOSTAT} for category-1 and category-2 observations (and thus the "power" of \code{DISCOSTAT} for assignment), the number of samples per stratum, the average strength of each Y-effect and Z-effect, the average strength of Y*Z interactions, etc. It requires the \pkg{offarray} package (purely for my programming convenience; it's not apparent in the output).
 
 \code{test_gasplit} fits a \code{\link{gasplit}} model (with no interactions) to the output of \code{make_fake_ppns}, running the latter itself if required. The output is the (true and) fitted proportions per strata, which can be compared: see \bold{Examples}. Note that it's a bit harsh to simulate with \code{interpow>0} and then test with \code{\link{gasplit}}, coz the latter assumes there's no interactions. (Of course, you can fit a model with interactions if you want.)
 }
@@ -12,7 +12,7 @@ make_fake_ppns(nyears = 4, nzones = 3, interpow = 0.1,
     df_t = 5, mean_nsamp = 100,  meanE = 1, prange = 1, seed = 2)
 test_gasplit(
     sim=NULL,
-    formulalala= LGLR ~ Y+Z-1,
+    formulalala= DISCOSTAT ~ Y+Z-1,
     use2= 's' \%in\% all.names( formula),
     ...
   )
@@ -40,7 +40,7 @@ sim2 <- make_fake_ppns(
     meanE= +2, # not-brilliant separation
     mean_nsamp=200, # reasonable samp sizes
     interpow=0) # no interactoins
-hist( sim2$LGLR, nc=40) # to see how good the separation is
+hist( sim2$DISCOSTAT, nc=40) # to see how good the separation is
 test2 <- test_gasplit( sim2)
 with( test2, plot( tru_ppnE, fit_ppnE))
 abline( 0,1)

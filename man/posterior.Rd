@@ -7,7 +7,7 @@ After fitting a \code{\link{gasplit}} model to estimate the \emph{prior} probabi
 The posteriors are also estimates, since they depend on the estimated model coefficients \code{beta}. You can also get their derivatives WRTO the coefficients (useful for downstream variance propagation).
 
 There's no attempt to predict "properly" for multiple imputations. You can DIY by predicting for each case, and manually weighted-summing the predictions; the mean will be OK. However, uncertainty won't be fully propagated. I reckon that's a NFN...
-\subsection{Requirement}{\code{posterior} \bold{assumes} that your discrimination statistic is actually a log-likelihood ratio--- not just some arbitrary stat that you made up, not a LGLR multiplied by 3, etc...
+\subsection{Requirements}{\code{posterior} \bold{assumes} that your discrimination statistic is actually a log-likelihood ratio--- not just some arbitrary stat that you made up, not a LGLR multiplied by 3, etc... and \bold{WATCH OUT} that the sign is correct! (ie that it's lglk(catgeory-1 / cat-2)) not the other way round... be careful!!! (Check that there's a \bold{positive} correlation between prior and posterior, and between lglk and posterior...)
 }
 }
 \usage{posterior(object, newdata = NULL, dbeta = FALSE)

@@ -92,10 +92,11 @@ stopifnot( length( start)==ncol( X))
     ppn <- cbind( ppn, dbeta)
   }
 
-
+  # Keep distros, eg for predictions/posteriors
+  
 return( c( returnList( 
     beta, SE_beta, V_beta,
-    ppn, G),
+    ppn, G, d1, d2),
     fitto[ cq( convergence, message, evaluations)]
   ))
 }
@@ -374,9 +375,11 @@ stopifnot(
   rep$V_beta <- solve( H)
   rep$SE_beta <- sqrt( diag( rep$V_beta))
 
+  # Keep distros, eg for predictions/posteriors
+
   retlist <- c( 
       rep, # beta, SE, V, ppn
-      returnList( G, outer_pars, obj),      
+      returnList( G, d1, d2, outer_pars, obj),      
       fitto[ cq( convergence, message, evaluations)]
     )
 
@@ -439,12 +442,12 @@ stop( "This demo function requires 'offarray' package")
   df <- as.data.frame( samp_ppnE, name_of_response='samp_ppnE')
   dfE <- df[ rep( seq_len( nstrat), c( nobsE)), ]
   dfE$whicho <- 'E'
-  dfE$LGLR <- rt( nrow( dfE), df=df_t) + meanE
+  dfE$DISCOSTAT <- rt( nrow( dfE), df=df_t) + meanE
   
   meanW <- (-meanE)  # opposite mean
   dfW <- df[ rep( seq_len( nstrat), c( nobsW)),]
   dfW$whicho <- 'W'
-  dfW$LGLR <- rt( nrow( dfW), df=df_t) + meanW
+  dfW$DISCOSTAT <- rt( nrow( dfW), df=df_t) + meanW
   
   dfall <- rbind( dfE, dfW)
   rownames( dfall) <- NULL # they are just annoying
@@ -456,21 +459,26 @@ return( dfall)
 
 
 "posterior" <-
-function( object, newdata=NULL, dbeta=FALSE){
-## Assumes that the response is a LOG-LIKELIHOOD RATIO... 
-## ... don't run this on any-old-rubbish
-
+function( 
+  object, 
+  newdata= NULL, 
+  dbeta=FALSE
+){
+  d1 <- object$G$d1
+  d2 <- object$G$d2  
 
   pE <- NULL # make it below  
   if( is.null( newdata)){
-    LGLR <- object$G$y
+    y <- object$G$y
     if( !dbeta){
       pE <- object$ppn # fitted
     }
   } else {
     # Response variable (perhaps transformed, as per formula)
-    LGLR <- eval( object$G$formula[[2]], newdata)
+    y <- eval( object$G$formula[[2]], newdata)
   }
+  
+  LR21 <- d2( y) / d1( y)
   
   if( is.null( pE)){
     # Use gasplit2, even if original was gasplit()
@@ -478,13 +486,12 @@ function( object, newdata=NULL, dbeta=FALSE){
         dbeta=dbeta)
   }
   
-  Prat <- exp( -LGLR)
   pEv <- if( dbeta) pE[,1] else pE
-  posterior <- 1/( 1+Prat*(1/pEv-1))
+  posterior <- 1/( 1+LR21*(1/pEv-1))
   
   if( dbeta){
-    # D( quote( 1/( 1+Prat*(1/pE-1))), 'pE')
-    DpE <-  Prat * (1/pEv^2)/(1 + Prat * (1/pEv - 1))^2
+    # D( quote( 1/( 1+LR21*(1/pE-1))), 'pE')
+    DpE <-  LR21 * (1/pEv^2)/(1 + LR21 * (1/pEv - 1))^2
     dpost_dbeta <- DpE * pE # pE is "really" cbind( pE, dpE/dbeta)
     dpost_dbeta[,1] <- posterior
     posterior <- dpost_dbeta
@@ -497,7 +504,7 @@ return( posterior)
 "test_gasplit" <-
 function( 
     sim=NULL, 
-    formulalala= LGLR ~ Y+Z-1, 
+    formulalala= DISCOSTAT ~ Y+Z-1, 
     use2= 's' %in% all.names( formula),
     ...
 ){
