@@ -46,8 +46,13 @@ There's deffo no support for sparsity.
 }
 }
 \usage{
-gasplit(formula, data, d1, d2, start=0.001,
-    predict_from_previous=NULL)
+gasplit(
+  formula,
+  data,
+  d1, d2,
+  start=0.001,
+  predict_from_previous= NULL
+)
 gasplit2(
   formula,
   data,
@@ -78,11 +83,12 @@ gasplit_missy(
 If \code{predict_from_previous} is supplied (and \code{data}, of course), all three functions return predicted proportions at each row of \code{data}. If \code{dbeta==TRUE} then the result will be not a vector, but a matrix whose first column is the point estimate, the remaining columns being its derivatives WRTO the elements of \code{beta}. You can use that to get standard errors on the predictions, something like this:
 %#
 \item{  t( ppn[,-1]) \%**\% V_beta \%**\% ppn[,-1]}{}
-Otherwise, the functions return a list, with various elements:
+Otherwise, the functions return a list, with various elements including at least:
 \item{ beta, SE_beta, V_beta}{for the raw paraameter estimates;}
 \item{ ppn}{estimated proportions, casewise (or a matrix if \code{dbeta==TRUE});}
-\item{ G}{setup for the underlying \code{\link{gam}}, so eg \code{G$X} is the design matrix}
-plus various convergence diagnostics. \code{gasplit2} and \code{gasplit_missy} also returns \code{obj} which is the \code{RTMB} object (from \code{MakeADFun}) after fitting, plus the estimated "outer parameters" (smoothing parameters and/or random-effect variances) as \code{outerpars} (NB probably on log scale). The latter are treated as fixed when computing the coefficient Hessian, i.e. there's no Bayes-Empirical-Bayes correction.
+\item{ G}{setup for the underlying \code{\link{gam}}, so eg \code{<obj>$G$X} is the design matrix}
+plus various convergence diagnostics. \code{gasplit2} and \code{gasplit_missy} also returns \code{$obj} which is the \code{RTMB} object (from \code{MakeADFun}) after fitting, plus the estimated "outer parameters" (smoothing parameters and/or random-effect variances) as \code{outerpars} (NB probably on log scale). The latter are treated as fixed when computing the coefficient Hessian, i.e. there's no Bayes-Empirical-Bayes correction.
+\code{gasplit_missy} also returns the \code{link_field} and \code{prob_field} arguments, plus a 3-column matrix \code{$split}, with columns "PPN", <link>, and <prob> (the latter two set by \code{link_field} and \code{prob_field}). This corresponds row-wise to the input dataframe (and to \code{$G$X}), so that a single case might be split into several imputations. It is used by \code{\link{posterior}}. Note that the casewise proportions \code{$ppn} has just row per case.
 }
 \details{
 Given parameters \code{beta} and a model-matrix \code{X} from the formula, the log-likelihood of observation \code{i} with response \code{y_i} is:

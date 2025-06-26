@@ -1,5 +1,32 @@
 # This is package gasplit 
 
+"agg_posterior_multimp" <-
+function( posterior, linkid, probimp) {
+## Aggregate posteriors casewise (input is one row per imp)
+
+  extract.named( process_multimp( linkid= linkid, probimp= probimp))      
+
+  # Avoid duplicating code for vector & matrix cases
+  if( posterior %is.not.a% 'matrix'){ 
+    dim( posterior) <- c( length( posterior), 1)
+  }
+  posterior <- probimp * posterior # works row-wise
+
+  for( im in 2 %upto% max_n_multi){
+    # Update only those cases with at least "im" multimps
+    posterior[ has_at_least[[ im]], ] <- posterior[ has_at_least[[ im]], ] + 
+        posterior[ nth_multi[[ im]], ]
+  }
+
+  posterior <- posterior[ primary,]
+  if( ncol( posterior)==1){
+    posterior <- c( posterior)
+  }
+  
+return( posterior)
+}
+
+
 "do_predict_from_previous" <-
 function( nlocal=sys.parent()) mlocal({
   # I think we have to actually "fit" the gam, so that we can use predict()
@@ -135,41 +162,11 @@ return( ppn)
   if( any( c( link_field, prob_field)  %in% all.names( formula))) {
 stop( "WHAAAAT are you thinking??? Link & prob fields don't belong in formula!")
   }
-  linkid <- data[[ link_field]]
-  linkid <- match( linkid, unique( linkid)) # integer: first will be 1
-  probimp <- data[[ prob_field]]
-stopifnot(
-    all( probimp >= 0),
-    all( probimp <= 1)
-  )
-  
-  # Normalize probimp
-  sump <- tapply( probimp, INDEX= list( linkid), sum)
-  if( any( abs( log( sump)) > 0.01)){
-    warning( "Multimp probs seem a bit... under-normalized. FT4U, but ...")
-  }
-  mm <- match( linkid, as.integer( names( sump)), 0)
-  probimp <- probimp / sump[ mm]
-  
-  multab <- tabulate( linkid) # safe coz ints starting at 1
-  primary <- which( linkid == seq_along( linkid)) # only these responses are used
-  no_multi <- which( multab==1) # simples
-  multi <- primary %except% no_multi # first multimp for each m-case
 
-  # Organize data for efficient calcs: loop over number-of-multimps
-  xlinkid <- linkid
-  xlinkid[ primary] <- (-1L) # these are done
-  max_n_multi <- max( multab)
-  has_at_least <- nth_multi <- vector( 'list', max_n_multi)
-  # has_at_least[[1]] <- primary
-  for( im in 2 %upto% max_n_multi){
-    this_or_more <- which( multab >= im)
-    has_at_least[[ im]] <- this_or_more
-    nth_instance <- match( this_or_more, xlinkid)
-    nth_multi[[ im]] <- nth_instance
-    xlinkid[ nth_instance] <- (-1L) # won't be found again
-  }
-
+  # max_n_multi, nth_multi, has_at_least, primary:
+  extract.named( process_multimp( 
+      linkid= data[[ link_field]], probimp= data[[ prob_field]]))
+      
   # Multimpized version   
   nlglk <- function( allpar){
     beta <- allpar[[1]]
@@ -186,18 +183,22 @@ stopifnot(
     
     # Non-multi ones are thereby done (but can safely be Xed by PROBIMP of 1 :). 
     # Accumulate multi ones into actual cases (only doing the first imps here)
+    ppn_split <- ppn # for REPORT
     prob <- prob * probimp
     ppn <- ppn * probimp
     
     for( im in 2 %upto% max_n_multi){
       # Update only those cases with at least "im" multimps
-      prob[ has_at_least[[ im]] ] <- prob[ has_at_least[[ im]] ] + prob[ nth_multi[[ im]] ]
-      ppn[ has_at_least[[ im]] ] <- ppn[ has_at_least[[ im]] ] + ppn[ nth_multi[[ im]] ]
+      prob[ has_at_least[[ im]] ] <- prob[ has_at_least[[ im]] ] + 
+          prob[ nth_multi[[ im]] ]
+      ppn[ has_at_least[[ im]] ] <- ppn[ has_at_least[[ im]] ] + 
+          ppn[ nth_multi[[ im]] ]
     }
     
     lglk <- sum( log( prob[ primary]))
     ppn <- ppn[ primary] # expected ppn just for each overall case (not imps); consistent with gasplit2
 
+    REPORT( ppn_split)
     REPORT( beta)
     REPORT( ppn)
     
@@ -215,6 +216,13 @@ stopifnot(
   }
 
   guts_gasplit2() # all the GAM setup and fitting. Same as for 'gasplit2', but 'nlglk' is slightly different
+  
+  retlist <- c( retlist, returnList( 
+      link_field, prob_field))
+  split_stuff <- cbind( rep$ppn_split, linkid, probimp)
+  colnames( split_stuff) <- c( 'PPN', link_field, prob_field)
+  retlist$split <- split_stuff
+  retlist$ppn_split <- NULL # it's in split_stuff
 return( retlist)
 }
 
@@ -462,26 +470,42 @@ return( dfall)
 function( 
   object, 
   newdata= NULL, 
-  dbeta=FALSE
+  dbeta=FALSE,
+  link_field= object$link_field,
+  prob_field= object$prob_field
 ){
-  d1 <- object$G$d1
-  d2 <- object$G$d2  
+  d1 <- object$d1
+  d2 <- object$d2  
 
+  missy <- all( cq( split, link_field, prob_field) %in% names( object))
+  
   pE <- NULL # make it below  
   if( is.null( newdata)){
     y <- object$G$y
     if( !dbeta){
-      pE <- object$ppn # fitted
+      # Get fitted values (split, in multimp case)
+      if( missy){
+        pE <- object$split[,1]
+        linkid <- object$split[,2]
+        probimp <- object$split[,3]
+      } else {
+        pE <- object$ppn
+      }
     }
   } else {
     # Response variable (perhaps transformed, as per formula)
     y <- eval( object$G$formula[[2]], newdata)
+    missy <- all( c( link_field, prob_field) %in% names( newdata))
+    if( missy){
+      linkid <- newdata[[ link_field]]
+      probimp <- newdata[[ prob_field]]
+    }
   }
   
   LR21 <- d2( y) / d1( y)
   
   if( is.null( pE)){
-    # Use gasplit2, even if original was gasplit()
+    # Use gasplit2, even if original was gasplit() AND even if missy
     pE <- gasplit2( data=newdata, predict_from_previous=object, 
         dbeta=dbeta)
   }
@@ -497,7 +521,53 @@ function(
     posterior <- dpost_dbeta
   }
   
+  if( missy){
+    posterior <- agg_posterior_multimp( posterior, linkid, probimp)
+  }
+  
 return( posterior)
+}
+
+
+"process_multimp" <-
+function( linkid, probimp){
+## Process case-linkage and prob info into form needed by multimp lglk 
+# and also by posterior()
+stopifnot(
+    all( probimp >= 0),
+    all( probimp <= 1),
+    length( probimp) == length( linkid)
+  )
+
+  linkid <- match( linkid, unique( linkid)) # integer: first will be 1  
+  # Normalize probimp
+  sump <- tapply( probimp, INDEX= list( linkid), sum)
+  if( any( abs( log( sump)) > 0.01)){
+    warning( "Multimp probs seem a bit... under-normalized. FT4U, but ...")
+  }
+  mm <- match( linkid, as.integer( names( sump)), 0)
+  probimp <- probimp / sump[ mm]
+  
+  multab <- tabulate( linkid) # safe coz ints starting at 1
+  primary <- which( linkid == seq_along( linkid)) # only these responses are used
+  no_multi <- which( multab==1) # simples
+  multi <- primary %except% no_multi # first multimp for each m-case
+
+  # Organize data for efficient calcs: loop over number-of-multimps
+  xlinkid <- linkid
+  xlinkid[ primary] <- (-1L) # these are done
+  max_n_multi <- max( multab)
+  has_at_least <- nth_multi <- vector( 'list', max_n_multi)
+  # has_at_least[[1]] <- primary
+  for( im in 2 %upto% max_n_multi){
+    this_or_more <- which( multab >= im)
+    has_at_least[[ im]] <- this_or_more
+    nth_instance <- match( this_or_more, xlinkid)
+    nth_multi[[ im]] <- nth_instance
+    xlinkid[ nth_instance] <- (-1L) # won't be found again
+  }
+  
+returnList( max_n_multi, nth_multi, has_at_least, primary)
 }
 
 
