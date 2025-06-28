@@ -1,3 +1,5 @@
+1.4.10: Added "multimp" aggregation to posterior(), mainly so it works autonicely with 'gasplit_missy' output
+
 1.4.7: Added demo ("gasplit_demo.r")
 
 1.4.0: Added 'posterior', and the 'dbeta' argument to 'gasplit' and 'posterior' for derivs (useful for variance and variance-propagation).

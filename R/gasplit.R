@@ -18,10 +18,7 @@ function( posterior, linkid, probimp) {
         posterior[ nth_multi[[ im]], ]
   }
 
-  posterior <- posterior[ primary,]
-  if( ncol( posterior)==1){
-    posterior <- c( posterior)
-  }
+  posterior <- posterior[ primary,] # auto-drops to vector if single-column
   
 return( posterior)
 }
@@ -164,8 +161,9 @@ stop( "WHAAAAT are you thinking??? Link & prob fields don't belong in formula!")
   }
 
   # max_n_multi, nth_multi, has_at_least, primary:
-  extract.named( process_multimp( 
-      linkid= data[[ link_field]], probimp= data[[ prob_field]]))
+  linkid <- data[[ link_field]]
+  probimp <- data[[ prob_field]]
+  extract.named( process_multimp( linkid, probimp))
       
   # Multimpized version   
   nlglk <- function( allpar){
@@ -471,8 +469,8 @@ function(
   object, 
   newdata= NULL, 
   dbeta=FALSE,
-  link_field= object$link_field,
-  prob_field= object$prob_field
+  link_field= object$link_field %||% NA,
+  prob_field= object$prob_field %||% NA
 ){
   d1 <- object$d1
   d2 <- object$d2  

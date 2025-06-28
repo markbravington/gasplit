@@ -1,4 +1,4 @@
-example_prep4missy                     Schematic data-prep for 'gasplit_missy'
-gasplit                                Flexible models for 2-category proportions from continuous data
-make_fake_ppns                         Simulate dataset for 'gasplit'
-posterior                              Posterior probability
+example_prep4missy                              Schematic data-prep for 'gasplit_missy'
+gasplit                                         Flexible models for 2-category proportions from continuous data
+make_fake_ppns                                  Simulate dataset for 'gasplit'
+posterior                                       Posterior probability

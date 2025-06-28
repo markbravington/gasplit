@@ -4,19 +4,19 @@
 \alias{gasplit_missy}
 \title{Flexible models for 2-category proportions from continuous data}
 \description{
-Suppose your data each come from one or the other of two categories (say, Eastern or Western Atlantic). You don't know for sure which one, but you do have a "measurement" for each one (say, a log-likelihood ratio) which tends to be high for one category and low for the other, with an a-priori-known distribution for each category (say, based on other samples of known category).
+Suppose your data each come from one or the other of two categories (say, Eastern or Western Atlantic). You don't know for sure which one, but you do have a "measurement" for each one (e.g. some kind of log-likelihood ratio, but it could be anything) which tends to be high for one category and low for the other, with an a-priori-known distribution for each category (say, based on other samples of known category).
 
 Now you want to estimate the proportion of category-1 samples in your data, but stratified according to covariates of each sample (say, year and location)--- and/or simply dependent on individual covariates, (say, size). Ideally, you'd like to be able to specify a flexible model formula just as you might in a GLM or GAM. Well, now you can! For example:
 
 \preformatted{
-  addmod <- gasplit( LGLR ~ factor(year) + factor(region) - 1,
+  addmod <- gasplit( DISCRIM ~ factor(year) + factor(region) - 1,
       data= ew_data,
       d1= known_distro_of_measurement_for_category_1,
       d2= ditto_for_2
     )
 }
 
-to fit a two-way model with no interactions, to a dataset with covariates "year" and "region" based on a measurement "LGLR".
+to fit a two-way model with no interactions, to a dataset with covariates "year" and "region" based on a measurement "DISCRIM".
 
 Having fitted your model, you can make a subsequent call to predict the proportion for (presumably) new covariate values, via the \code{predict_from_previous} argument. And, provided that your "measurement" really is a log-likelihood ratio, you can also calculate a posterior probability (of being category-1) for each case, using \code{\link{posterior}}.
 
@@ -51,13 +51,15 @@ gasplit(
   data,
   d1, d2,
   start=0.001,
-  predict_from_previous= NULL
+  predict_from_previous= NULL,
+  dbeta= FALSE
 )
 gasplit2(
   formula,
   data,
   d1, d2,
   predict_from_previous= NULL,
+  dbeta= FALSE,
   ... # for gam()
 )
 gasplit_missy(
@@ -66,6 +68,7 @@ gasplit_missy(
   d1, d2,
   link_field = "MULTIMP", prob_field = "PROBIMP",
   predict_from_previous= NULL,
+  dbeta= FALSE,
   ... # for gam()
 )
 }
@@ -76,7 +79,7 @@ gasplit_missy(
 \item{ start}{(just \code{gasplit}, not \code{gasplit2}). Either a scalar (probably close to 0) which will be used for all coefficients, or a vector with length \code{ncol(<model matrix>)}. TBH I'd leave it blank; the default will prolly work.}
 \item{ link_field, prob_field}{what names the missing-data columns columns have. Probably simpler to make sure your dataset has them under the default names.}
 \item{ predict_from_previous}{Optional result from a previous call to \code{gasplit}. If set, then no fitting will happen, but \code{gasplit} will make predictions at the (presumably new) values of \code{data}, based on the parameters of the previous fit.}
-\item{ dbeta}{whether to calculate derivatives of each prediction WRTO the parameters (for variance calculations).}
+\item{ dbeta}{whether to calculate derivatives of each prediction WRTO the parameters (mainly for subsequent variance calculations).}
 \item{ ...}{for \code{gasplit2} and \code{gasplit_missy} only, additional args to \code{mgcv::gam} (qv), eg \code{knots}.}
 }
 \value{
